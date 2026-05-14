@@ -1,4 +1,4 @@
-# Audio Visualization CLI - MiruZen (Mizen)
+# Audio Visualization CLI - Mizen
 
 A high-performance command-line tool written in Rust to generate transparent video visualizations from audio files. 
 
