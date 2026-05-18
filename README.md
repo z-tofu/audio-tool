@@ -2,7 +2,7 @@
 
 A high-performance command-line tool written in Rust to generate transparent video visualizations from audio files. 
 
-The tool uses `tiny-skia` for blazing-fast software rendering and `rayon` to parallelize frame generation across CPU cores. It pipes the rendered frames directly to `ffmpeg` to generate video files with full alpha transparency support (such as ProRes MOV or WebM Alpha), making the resulting visualizations perfect for dropping into your video editing software of choice.
+The tool uses `tiny-skia` for software rendering and `rayon` to parallelize frame generation across CPU cores. It pipes the rendered frames directly to `ffmpeg` to generate video files with full alpha transparency support (such as ProRes MOV or WebM Alpha), making the resulting visualizations perfect for dropping into your video editing software of choice.
 
 ## Prerequisites
 
