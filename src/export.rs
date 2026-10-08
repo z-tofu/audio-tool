@@ -1,22 +1,22 @@
-use std::process::{Command, Stdio, Child};
+use std::process::{Command, Stdio, Child, ChildStdin};
 use std::io::Write;
 
 pub struct Exporter {
     child: Child,
-    #[allow(dead_code)]
-    width: u32,
-    #[allow(dead_code)]
-    height: u32,
+    stdin: Option<ChildStdin>,
 }
 
 impl Exporter {
     pub fn new(output_path: &str, input_audio: &str, width: u32, height: u32, fps: u32) -> Self {
-        let is_webm = output_path.ends_with(".webm");
-        let is_mov = output_path.ends_with(".mov");
-        
+        let lower = output_path.to_ascii_lowercase();
+        let is_webm = lower.ends_with(".webm");
+        let is_mov = lower.ends_with(".mov");
+
         let mut cmd = Command::new("ffmpeg");
         cmd.args(&[
             "-y", // Overwrite output
+            "-hide_banner",
+            "-loglevel", "error", // Only print real problems
             "-f", "rawvideo",
             "-vcodec", "rawvideo",
             "-s", &format!("{}x{}", width, height),
@@ -31,6 +31,13 @@ impl Exporter {
                 "-c:v", "libvpx-vp9",
                 "-pix_fmt", "yuva420p",
                 "-auto-alt-ref", "0",
+                // libvpx defaults are extremely slow; these keep quality reasonable
+                // while using all cores
+                "-deadline", "good",
+                "-cpu-used", "4",
+                "-row-mt", "1",
+                "-b:v", "0",
+                "-crf", "32",
                 "-c:a", "libopus",
             ]);
         } else if is_mov {
@@ -48,39 +55,36 @@ impl Exporter {
                  "-c:a", "aac",
             ]);
         }
-        
+
         cmd.args(&[
             "-map", "0:v:0",
             "-map", "1:a:0",
             "-shortest", // Stop encoding when the shortest stream ends (usually video)
             output_path
         ]);
-        
+
         cmd.stdin(Stdio::piped());
-        // Uncomment to debug ffmpeg output
-        // cmd.stderr(Stdio::inherit());
-        cmd.stderr(Stdio::null());
+        cmd.stderr(Stdio::inherit());
         cmd.stdout(Stdio::null());
 
-        let child = cmd.spawn().expect("Failed to start ffmpeg. Make sure ffmpeg is installed and in your PATH.");
+        let mut child = cmd.spawn().expect("Failed to start ffmpeg. Make sure ffmpeg is installed and in your PATH.");
+        let stdin = child.stdin.take();
 
-        Self {
-            child,
-            width,
-            height,
-        }
+        Self { child, stdin }
     }
 
     pub fn write_frame(&mut self, frame_data: &[u8]) {
-        if let Some(mut stdin) = self.child.stdin.take() {
-            stdin.write_all(frame_data).expect("Failed to write frame to ffmpeg stdin");
-            self.child.stdin = Some(stdin);
+        if let Some(stdin) = self.stdin.as_mut() {
+            stdin.write_all(frame_data).expect("Failed to write frame to ffmpeg stdin (did ffmpeg exit early?)");
         }
     }
 
     pub fn finish(&mut self) {
         // Drop stdin to signal EOF
-        self.child.stdin.take();
-        self.child.wait().expect("ffmpeg process failed");
+        self.stdin.take();
+        let status = self.child.wait().expect("Failed to wait for ffmpeg");
+        if !status.success() {
+            panic!("ffmpeg exited with {}", status);
+        }
     }
 }
